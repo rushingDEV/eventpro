@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===== USERS & AUTH =====
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  phone         String?   @unique
+  name          String
+  passwordHash  String?
+  role          UserRole  @default(COUPLE)
+  avatarUrl     String?
+  events        Event[]
+  venueId       String?
+  venue         Venue?    @relation(fields: [venueId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum UserRole {
+  COUPLE
+  VENUE_ADMIN
+  VENDOR
+  ADMIN
+}
+
+// ===== VENUES =====
+
+model Venue {
+  id              String          @id @default(cuid())
+  name            String
+  address         String
+  city            String
+  maxCapacity     Int
+  defaultLayout   Json?
+  logoUrl         String?
+  contactPhone    String?
+  contactEmail    String?
+  users           User[]
+  events          Event[]
+  floorTemplates  FloorTemplate[]
+  createdAt       DateTime        @default(now())
+}
+
+model FloorTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  venueId   String
+  venue     Venue    @relation(fields: [venueId], references: [id])
+  layout    Json
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ===== EVENTS =====
+
+model Event {
+  id              String      @id @default(cuid())
+  name            String
+  type            EventType   @default(WEDDING)
+  date            DateTime
+  time            String?
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  venueId         String?
+  venue           Venue?      @relation(fields: [venueId], references: [id])
+
+  // Settings
+  minGuarantee    Int?
+  pricePerPlate   Float?
+  reservePercent  Float?      @default(10)
+
+  // Relations
+  guests          Guest[]
+  groups          GuestGroup[]
+  tables          EventTable[]
+  gifts           Gift[]
+  tasks           Task[]
+
+  // Floor plan
+  floorPlan       Json?
+
+  // Invitation
+  inviteDesign    Json?
+  miniSiteSlug    String?     @unique
+  miniSiteConfig  Json?
+
+  // Stats cache
+  confirmedCount  Int         @default(0)
+  declinedCount   Int         @default(0)
+  pendingCount    Int         @default(0)
+  totalSeated     Int         @default(0)
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+enum EventType {
+  WEDDING
+  BAR_MITZVAH
+  BAT_MITZVAH
+  BRIT
+  BIRTHDAY
+  CORPORATE
+  OTHER
+}
+
+// ===== GUEST GROUPS =====
+
+model GuestGroup {
+  id          String     @id @default(cuid())
+  eventId     String
+  event       Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  side        GuestSide
+  color       String     @default("#3B82F6")
+  priority    Int        @default(5)
+  proximity   Json?
+  guests      Guest[]
+  createdAt   DateTime   @default(now())
+}
+
+enum GuestSide {
+  GROOM
+  BRIDE
+  SHARED
+}
+
+// ===== GUESTS =====
+
+model Guest {
+  id              String       @id @default(cuid())
+  eventId         String
+  event           Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  firstName       String
+  lastName        String?
+  phone           String?
+  email           String?
+
+  groupId         String?
+  group           GuestGroup?  @relation(fields: [groupId], references: [id])
+  side            GuestSide    @default(SHARED)
+  relation        String?
+
+  rsvpStatus      RsvpStatus   @default(PENDING)
+  rsvpCount       Int          @default(1)
+  invitedCount    Int          @default(1)
+  rsvpDate        DateTime?
+  rsvpMethod      String?
+
+  tableId         String?
+  table           EventTable?  @relation(fields: [tableId], references: [id])
+  seatNumber      Int?
+
+  dietaryNeeds    String?
+  accessibility   String?
+  hasChildren     Boolean      @default(false)
+  childrenCount   Int          @default(0)
+  childrenAges    String?
+
+  needsTransport  Boolean      @default(false)
+  transportNote   String?
+
+  messages        GuestMessage[]
+  gifts           Gift[]
+
+  notes           String?
+  vipLevel        Int          @default(0)
+  proximityScores Json?
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([eventId, rsvpStatus])
+  @@index([eventId, groupId])
+  @@index([eventId, tableId])
+}
+
+enum RsvpStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  MAYBE
+  NO_RESPONSE
+}
+
+// ===== TABLES =====
+
+model EventTable {
+  id          String     @id @default(cuid())
+  eventId     String
+  event       Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  number      Int
+  name        String?
+  shape       TableShape @default(ROUND)
+  capacity    Int        @default(10)
+
+  posX        Float      @default(0)
+  posY        Float      @default(0)
+  rotation    Float      @default(0)
+  width       Float?
+  height      Float?
+  radius      Float?
+
+  isLocked    Boolean    @default(false)
+  isVIP       Boolean    @default(false)
+  zone        String?
+
+  guests      Guest[]
+
+  createdAt   DateTime   @default(now())
+
+  @@unique([eventId, number])
+}
+
+enum TableShape {
+  ROUND
+  RECTANGLE
+  SQUARE
+  OVAL
+  LONG
+}
+
+// ===== GIFTS =====
+
+model Gift {
+  id              String    @id @default(cuid())
+  eventId         String
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guestId         String?
+  guest           Guest?    @relation(fields: [guestId], references: [id])
+
+  type            GiftType
+  amount          Float?
+  currency        String    @default("ILS")
+  description     String?
+
+  paymentId       String?
+  paymentStatus   String?
+
+  checkNumber     String?
+  bankName        String?
+  envelopeNumber  Int?
+
+  receivedAt      DateTime  @default(now())
+  notes           String?
+
+  createdAt       DateTime  @default(now())
+}
+
+enum GiftType {
+  CASH
+  CHECK
+  CREDIT_CARD
+  TRANSFER
+  BIT
+  PAYBOX
+  PHYSICAL
+  OTHER
+}
+
+// ===== MESSAGES =====
+
+model GuestMessage {
+  id          String   @id @default(cuid())
+  guestId     String
+  guest       Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  type        String
+  direction   String
+  template    String?
+  content     String
+  status      String
+
+  sentAt      DateTime @default(now())
+}
+
+// ===== TASKS =====
+
+model Task {
+  id          String    @id @default(cuid())
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  dueDate     DateTime?
+  completed   Boolean   @default(false)
+  category    String?
+  priority    Int       @default(5)
+
+  createdAt   DateTime  @default(now())
+}
