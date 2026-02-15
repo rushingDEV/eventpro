@@ -8,6 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Check } from "lucide-react";
+
+const benefits = [
+  "הושבה חכמה מבוססת AI",
+  "חיסכון של אלפי שקלים",
+  "ניהול מוזמנים ומתנות",
+  "תוכנית קומה אינטראקטיבית",
+];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -67,71 +75,91 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">הרשמה</CardTitle>
-          <CardDescription>צור חשבון EventPro חדש — בחינם!</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+    <div className="flex min-h-screen bg-gradient-hero">
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center">
+            <Link href="/" className="text-2xl font-bold">
+              <span className="text-gradient-brand">Event</span>Pro
+            </Link>
+          </div>
+
+          <Card className="shadow-lg border-0">
+            <CardHeader className="text-center pb-2">
+              <CardTitle className="text-2xl">הצטרפו ל-EventPro</CardTitle>
+              <CardDescription>חינם לחלוטין, ללא כרטיס אשראי</CardDescription>
+            </CardHeader>
+            <form onSubmit={handleSubmit}>
+              <CardContent className="space-y-4">
+                {error && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="name">שם מלא</Label>
+                  <Input id="name" name="name" placeholder="דנה ויוסי" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">אימייל</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
+                    dir="ltr"
+                    className="text-left"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">סיסמה</Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    minLength={6}
+                    required
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">אימות סיסמה</Label>
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    minLength={6}
+                    required
+                    dir="ltr"
+                  />
+                </div>
+              </CardContent>
+              <CardFooter className="flex flex-col gap-4">
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "נרשם..." : "הרשמה חינם"}
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  כבר יש לך חשבון?{" "}
+                  <Link href="/login" className="text-primary hover:underline font-medium">
+                    התחברות
+                  </Link>
+                </p>
+              </CardFooter>
+            </form>
+          </Card>
+
+          {/* Benefits */}
+          <div className="space-y-2">
+            {benefits.map((b) => (
+              <div key={b} className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                <span>{b}</span>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="name">שם מלא</Label>
-              <Input id="name" name="name" placeholder="דנה ויוסי" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">אימייל</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@example.com"
-                required
-                dir="ltr"
-                className="text-left"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">סיסמה</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                minLength={6}
-                required
-                dir="ltr"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">אימות סיסמה</Label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                minLength={6}
-                required
-                dir="ltr"
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "נרשם..." : "הרשמה"}
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              כבר יש לך חשבון?{" "}
-              <Link href="/login" className="text-primary hover:underline">
-                התחברות
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

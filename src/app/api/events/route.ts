@@ -11,12 +11,24 @@ export async function GET() {
   const events = await prisma.event.findMany({
     where: { userId: session.user.id },
     include: {
+      guests: { select: { rsvpStatus: true } },
       _count: { select: { guests: true, tables: true } },
     },
     orderBy: { date: "asc" },
   });
 
-  return NextResponse.json(events);
+  // Compute RSVP counts server-side
+  const eventsWithCounts = events.map((event) => {
+    const confirmedCount = event.guests.filter((g) => g.rsvpStatus === "CONFIRMED").length;
+    const declinedCount = event.guests.filter((g) => g.rsvpStatus === "DECLINED").length;
+    const pendingCount = event.guests.filter(
+      (g) => g.rsvpStatus === "PENDING" || g.rsvpStatus === "NO_RESPONSE"
+    ).length;
+    const { guests: _guests, ...rest } = event;
+    return { ...rest, confirmedCount, declinedCount, pendingCount };
+  });
+
+  return NextResponse.json(eventsWithCounts);
 }
 
 export async function POST(request: NextRequest) {

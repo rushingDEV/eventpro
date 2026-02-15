@@ -1,29 +1,32 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { format, differenceInDays } from "date-fns";
 import { he } from "date-fns/locale";
 import {
   CalendarDays,
   Users,
-  UserCheck,
-  UserX,
-  Clock,
   Plus,
   ArrowLeft,
+  TrendingDown,
+  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RsvpChart } from "@/components/dashboard/rsvp-chart";
 
 interface EventWithCounts {
   id: string;
   name: string;
   type: string;
   date: string;
+  pricePerPlate: number | null;
+  reservePercent: number | null;
   confirmedCount: number;
   declinedCount: number;
   pendingCount: number;
@@ -40,7 +43,39 @@ const eventTypeLabels: Record<string, string> = {
   OTHER: "אחר",
 };
 
+const eventTypeColors: Record<string, string> = {
+  WEDDING: "bg-pink-100 text-pink-700",
+  BAR_MITZVAH: "bg-blue-100 text-blue-700",
+  BAT_MITZVAH: "bg-purple-100 text-purple-700",
+  BRIT: "bg-sky-100 text-sky-700",
+  BIRTHDAY: "bg-amber-100 text-amber-700",
+  CORPORATE: "bg-slate-100 text-slate-700",
+  OTHER: "bg-gray-100 text-gray-700",
+};
+
+function computeDeadSeatWaste(events: EventWithCounts[]) {
+  let totalWaste = 0;
+  let totalEmptySeats = 0;
+  for (const event of events) {
+    if (!event.pricePerPlate) continue;
+    const noShowRate = (event.reservePercent || 10) / 100;
+    const guests = event._count.guests;
+    const expectedNoShows = Math.round(guests * noShowRate);
+    const seatsPerTable = 10;
+    const tablesNeeded = Math.ceil(guests / seatsPerTable);
+    const totalCapacity = tablesNeeded * seatsPerTable;
+    const emptyFromRounding = totalCapacity - guests;
+    const emptySeats = expectedNoShows + emptyFromRounding;
+    totalEmptySeats += emptySeats;
+    totalWaste += emptySeats * event.pricePerPlate;
+  }
+  return { totalWaste, totalEmptySeats };
+}
+
 export default function DashboardPage() {
+  const { data: session } = useSession();
+  const firstName = session?.user?.name?.split(" ")[0] || "";
+
   const { data: events, isLoading } = useQuery<EventWithCounts[]>({
     queryKey: ["events"],
     queryFn: async () => {
@@ -50,7 +85,6 @@ export default function DashboardPage() {
     },
   });
 
-  // Find the closest upcoming event
   const upcomingEvent = events
     ?.filter((e) => new Date(e.date) >= new Date())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
@@ -60,22 +94,23 @@ export default function DashboardPage() {
     : null;
 
   const totalGuests = events?.reduce((sum, e) => sum + e._count.guests, 0) || 0;
-  const totalConfirmed =
-    events?.reduce((sum, e) => sum + e.confirmedCount, 0) || 0;
-  const totalDeclined =
-    events?.reduce((sum, e) => sum + e.declinedCount, 0) || 0;
-  const totalPending =
-    events?.reduce((sum, e) => sum + e.pendingCount, 0) || 0;
-  const confirmRate =
-    totalGuests > 0 ? Math.round((totalConfirmed / totalGuests) * 100) : 0;
+  const totalConfirmed = events?.reduce((sum, e) => sum + e.confirmedCount, 0) || 0;
+  const totalDeclined = events?.reduce((sum, e) => sum + e.declinedCount, 0) || 0;
+  const totalPending = events?.reduce((sum, e) => sum + e.pendingCount, 0) || 0;
+
+  const deadSeat = events ? computeDeadSeatWaste(events) : { totalWaste: 0, totalEmptySeats: 0 };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32" />
+        <Skeleton className="h-10 w-64" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-48" />
+          <Skeleton className="h-48" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-40" />
           ))}
         </div>
       </div>
@@ -84,8 +119,18 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Greeting + New Event */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">דשבורד</h1>
+        <div>
+          <h1 className="text-3xl font-bold">
+            {firstName ? `שלום, ${firstName}` : "דשבורד"}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {upcomingEvent
+              ? `${daysUntilEvent} ימים לאירוע הבא`
+              : "צרו את האירוע הראשון שלכם"}
+          </p>
+        </div>
         <Button asChild>
           <Link href="/events/new">
             <Plus className="ml-2 h-4 w-4" />
@@ -94,79 +139,87 @@ export default function DashboardPage() {
         </Button>
       </div>
 
+      {/* Top Row: Dead Seat Insight + RSVP Donut */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Dead Seat Insight Card */}
+        <Card className="border-0 bg-gradient-to-l from-rose-50 to-amber-50 overflow-hidden relative">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,oklch(0.45_0.16_350/0.06),transparent)] pointer-events-none" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendingDown className="h-5 w-5 text-amber-600" />
+              Dead Seat Insight
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="relative">
+            {deadSeat.totalWaste > 0 ? (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-4xl font-black text-gradient-brand" dir="ltr">
+                    ₪{deadSeat.totalWaste.toLocaleString()}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    מבוזבזים על {deadSeat.totalEmptySeats} מושבים ריקים
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/5">
+                  <Link href={upcomingEvent ? `/events/${upcomingEvent.id}/seating` : "/events"}>
+                    <Sparkles className="ml-2 h-3.5 w-3.5" />
+                    תקנו עם הושבה חכמה
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-muted-foreground text-sm">
+                  הוסיפו מחיר למנה באירוע כדי לראות כמה תוכלו לחסוך
+                </p>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/calculator">
+                    מחשבון חיסכון
+                    <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* RSVP Summary Donut */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">סטטוס אישורים</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RsvpChart
+              confirmed={totalConfirmed}
+              pending={totalPending}
+              declined={totalDeclined}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Countdown Card */}
       {upcomingEvent && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="flex items-center justify-between py-6">
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex items-center justify-between py-5">
             <div>
-              <h2 className="text-xl font-bold">{upcomingEvent.name}</h2>
-              <p className="text-muted-foreground">
+              <h2 className="text-lg font-bold">{upcomingEvent.name}</h2>
+              <p className="text-sm text-muted-foreground">
                 {format(new Date(upcomingEvent.date), "EEEE, dd MMMM yyyy", {
                   locale: he,
                 })}
               </p>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-primary">
+              <div className="text-3xl font-black text-primary">
                 {daysUntilEvent}
               </div>
-              <div className="text-sm text-muted-foreground">ימים נותרו</div>
+              <div className="text-xs text-muted-foreground">ימים נותרו</div>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">סה״כ מוזמנים</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalGuests}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">אישרו הגעה</CardTitle>
-            <UserCheck className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {totalConfirmed}
-            </div>
-            {totalGuests > 0 && (
-              <Progress value={confirmRate} className="mt-2 h-2" />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">ממתינים</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {totalPending}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">לא מגיעים</CardTitle>
-            <UserX className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {totalDeclined}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Events List */}
       <div>
@@ -177,7 +230,7 @@ export default function DashboardPage() {
               <CalendarDays className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium">אין אירועים עדיין</h3>
               <p className="text-muted-foreground mb-4">
-                צור את האירוע הראשון שלך כדי להתחיל
+                צרו את האירוע הראשון שלכם כדי להתחיל
               </p>
               <Button asChild>
                 <Link href="/events/new">
@@ -189,33 +242,78 @@ export default function DashboardPage() {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {events.map((event) => (
-              <Link key={event.id} href={`/events/${event.id}`}>
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{event.name}</CardTitle>
-                      <Badge variant="secondary">
-                        {eventTypeLabels[event.type] || event.type}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(event.date), "dd/MM/yyyy", {
-                        locale: he,
-                      })}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {event._count.guests} מוזמנים
-                      </span>
-                      <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+            {events.map((event) => {
+              const totalEventGuests = event._count.guests;
+              const rsvpRate =
+                totalEventGuests > 0
+                  ? Math.round(
+                      (event.confirmedCount / totalEventGuests) * 100
+                    )
+                  : 0;
+              const daysLeft = differenceInDays(
+                new Date(event.date),
+                new Date()
+              );
+              const isPast = daysLeft < 0;
+
+              return (
+                <Link key={event.id} href={`/events/${event.id}`}>
+                  <Card className="hover:border-primary/50 hover:shadow-md transition-all cursor-pointer h-full">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base">
+                          {event.name}
+                        </CardTitle>
+                        <Badge
+                          className={
+                            eventTypeColors[event.type] ||
+                            "bg-gray-100 text-gray-700"
+                          }
+                          variant="secondary"
+                        >
+                          {eventTypeLabels[event.type] || event.type}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(event.date), "dd/MM/yyyy", {
+                            locale: he,
+                          })}
+                        </p>
+                        {!isPast && (
+                          <span className="text-xs font-medium text-primary">
+                            {daysLeft === 0
+                              ? "היום!"
+                              : `${daysLeft} ימים`}
+                          </span>
+                        )}
+                        {isPast && (
+                          <span className="text-xs text-muted-foreground">
+                            הסתיים
+                          </span>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            {totalEventGuests} מוזמנים
+                          </span>
+                          <span className="font-medium text-green-600">
+                            {event.confirmedCount} אישרו
+                          </span>
+                        </div>
+                        {totalEventGuests > 0 && (
+                          <Progress value={rsvpRate} className="h-1.5" />
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

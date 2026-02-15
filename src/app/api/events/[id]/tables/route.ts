@@ -31,6 +31,14 @@ export async function GET(
           groupId: true,
           side: true,
           rsvpStatus: true,
+          seatNumber: true,
+          group: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
         },
       },
       _count: { select: { guests: true } },
