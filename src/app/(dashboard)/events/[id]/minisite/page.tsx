@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { Globe, Copy, ExternalLink, Save } from "lucide-react";
@@ -24,19 +24,22 @@ export default function MinisitePage() {
     },
   });
 
-  const [slug, setSlug] = useState(event?.miniSiteSlug || "");
-  const [wazeLink, setWazeLink] = useState(
-    (event?.miniSiteConfig as Record<string, string>)?.wazeLink || ""
-  );
-  const [dressCode, setDressCode] = useState(
-    (event?.miniSiteConfig as Record<string, string>)?.dressCode || ""
-  );
-  const [parking, setParking] = useState(
-    (event?.miniSiteConfig as Record<string, string>)?.parking || ""
-  );
-  const [greeting, setGreeting] = useState(
-    (event?.miniSiteConfig as Record<string, string>)?.greeting || ""
-  );
+  const [slug, setSlug] = useState("");
+  const [wazeLink, setWazeLink] = useState("");
+  const [dressCode, setDressCode] = useState("");
+  const [parking, setParking] = useState("");
+  const [greeting, setGreeting] = useState("");
+
+  useEffect(() => {
+    if (event) {
+      setSlug(event.miniSiteSlug || "");
+      const config = event.miniSiteConfig as Record<string, string> | null;
+      setWazeLink(config?.wazeLink || "");
+      setDressCode(config?.dressCode || "");
+      setParking(config?.parking || "");
+      setGreeting(config?.greeting || "");
+    }
+  }, [event]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {

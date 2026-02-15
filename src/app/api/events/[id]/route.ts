@@ -50,7 +50,7 @@ export async function PUT(
   }
 
   const body = await request.json();
-  const { name, type, date, time, venueId, minGuarantee, pricePerPlate } = body;
+  const { name, type, date, time, venueId, minGuarantee, pricePerPlate, miniSiteSlug, miniSiteConfig } = body;
 
   const event = await prisma.event.update({
     where: { id },
@@ -66,6 +66,8 @@ export async function PUT(
       ...(pricePerPlate !== undefined && {
         pricePerPlate: pricePerPlate ? parseFloat(pricePerPlate) : null,
       }),
+      ...(miniSiteSlug !== undefined && { miniSiteSlug }),
+      ...(miniSiteConfig !== undefined && { miniSiteConfig }),
     },
   });
 
