@@ -1,22 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import dynamic from "next/dynamic";
+import { useState, useCallback } from "react";
+import { Stage, Layer, Rect } from "react-konva";
 import { TableShape } from "./table-shape";
-
-// Dynamically import Konva components (no SSR)
-const Stage = dynamic(
-  () => import("react-konva").then((mod) => mod.Stage),
-  { ssr: false }
-);
-const Layer = dynamic(
-  () => import("react-konva").then((mod) => mod.Layer),
-  { ssr: false }
-);
-const Rect = dynamic(
-  () => import("react-konva").then((mod) => mod.Rect),
-  { ssr: false }
-);
 
 interface TableData {
   id: string;
@@ -91,7 +77,6 @@ export function FloorPlanCanvas({
           setPosition({ x: e.target.x(), y: e.target.y() });
         }}
         onClick={(e) => {
-          // Deselect if clicking on empty space
           if (e.target === e.target.getStage()) {
             onSelectTable(null);
           }

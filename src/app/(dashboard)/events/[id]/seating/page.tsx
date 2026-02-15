@@ -23,8 +23,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { FloorPlanCanvas } from "@/components/floor-plan/floor-plan-canvas";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
+
+const FloorPlanCanvas = dynamic(
+  () =>
+    import("@/components/floor-plan/floor-plan-canvas").then(
+      (mod) => mod.FloorPlanCanvas
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="border rounded-lg bg-gray-50 flex items-center justify-center h-[600px]">
+        <div className="text-muted-foreground">טוען מפת הושבה...</div>
+      </div>
+    ),
+  }
+);
 
 interface SeatingResultData {
   assignments: Record<string, string>;
