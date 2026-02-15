@@ -13,6 +13,13 @@ export async function GET(
 
   const { id } = await params;
 
+  const event = await prisma.event.findFirst({
+    where: { id, userId: session.user.id },
+  });
+  if (!event) {
+    return NextResponse.json({ error: "אירוע לא נמצא" }, { status: 404 });
+  }
+
   const tables = await prisma.eventTable.findMany({
     where: { eventId: id },
     include: {
