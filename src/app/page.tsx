@@ -10,6 +10,10 @@ import {
   ArrowLeft,
   Sparkles,
   Check,
+  Store,
+  Camera,
+  Music,
+  Flower2,
 } from "lucide-react";
 
 const features = [
@@ -105,6 +109,12 @@ export default function HomePage() {
             Event<span className="text-primary">Pro</span>
           </Link>
           <div className="flex items-center gap-4">
+            <Link
+              href="/marketplace"
+              className="text-sm text-muted-foreground hover:text-primary transition-colors hidden sm:block"
+            >
+              ספקים
+            </Link>
             <Link
               href="/calculator"
               className="text-sm text-muted-foreground hover:text-primary transition-colors hidden sm:block"
@@ -308,6 +318,52 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Vendor Marketplace */}
+      <section className="py-20 px-6 bg-white/50">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary rounded-full px-4 py-1.5 text-sm font-medium mb-4">
+              <Store className="h-4 w-4" />
+              חדש!
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black">
+              מצאו את הספקים המושלמים
+            </h2>
+            <p className="text-muted-foreground text-lg mt-3">
+              צלמים, DJ, עיצוב פרחים, קייטרינג ועוד — כל ספקי האירועים במקום אחד
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3 mb-8">
+            {[
+              { icon: Camera, title: "צלמים ווידאו", desc: "צילום סטילס, וידאו ודרון" },
+              { icon: Music, title: "DJ ומוזיקה", desc: "תקליטנים, להקות וזמרים" },
+              { icon: Flower2, title: "עיצוב פרחים", desc: "סידורי פרחים וחופה" },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.title} href="/marketplace">
+                  <div className="bg-card rounded-xl border p-6 hover:shadow-lg hover:border-primary/20 transition-all duration-300 text-center">
+                    <div className="h-12 w-12 mx-auto rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+                      <Icon className="h-6 w-6 text-primary" />
+                    </div>
+                    <h3 className="font-bold">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{item.desc}</p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+          <div className="text-center">
+            <Button asChild size="lg" variant="outline" className="text-base px-8">
+              <Link href="/marketplace">
+                <Store className="ml-2 h-4 w-4" />
+                כל הספקים
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="py-20 px-6">
         <div className="max-w-3xl mx-auto bg-gradient-cta rounded-2xl p-10 md:p-14 text-white text-center space-y-6">
@@ -344,12 +400,24 @@ export default function HomePage() {
                 ניהול אירועים חכם מבוסס AI
               </p>
             </div>
-            <div className="flex gap-6 text-sm text-muted-foreground">
+            <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
+              <Link
+                href="/marketplace"
+                className="hover:text-foreground transition-colors"
+              >
+                ספקים
+              </Link>
               <Link
                 href="/calculator"
                 className="hover:text-foreground transition-colors"
               >
                 מחשבון חיסכון
+              </Link>
+              <Link
+                href="/register-vendor"
+                className="hover:text-foreground transition-colors"
+              >
+                הרשמת ספקים
               </Link>
               <Link
                 href="/login"

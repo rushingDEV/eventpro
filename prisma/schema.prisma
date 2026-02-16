@@ -10,18 +10,22 @@ datasource db {
 // ===== USERS & AUTH =====
 
 model User {
-  id            String    @id @default(cuid())
-  email         String?   @unique
-  phone         String?   @unique
-  name          String
-  passwordHash  String?
-  role          UserRole  @default(COUPLE)
-  avatarUrl     String?
-  events        Event[]
-  venueId       String?
-  venue         Venue?    @relation(fields: [venueId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String           @id @default(cuid())
+  email           String?          @unique
+  phone           String?          @unique
+  name            String
+  passwordHash    String?
+  role            UserRole         @default(COUPLE)
+  avatarUrl       String?
+  events          Event[]
+  venueId         String?
+  venue           Venue?           @relation(fields: [venueId], references: [id])
+  vendorProfile   VendorProfile?
+  vendorReviews   VendorReview[]
+  vendorLeads     VendorLead[]
+  vendorFavorites VendorFavorite[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 enum UserRole {
@@ -83,6 +87,7 @@ model Event {
   tables          EventTable[]
   gifts           Gift[]
   tasks           Task[]
+  vendorLeads     VendorLead[]
 
   // Floor plan
   floorPlan       Json?
@@ -299,4 +304,242 @@ model Task {
   priority    Int       @default(5)
 
   createdAt   DateTime  @default(now())
+}
+
+// ===== VENDOR MARKETPLACE =====
+
+enum VendorStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum VendorSubscriptionTier {
+  FREE
+  BASIC
+  PREMIUM
+  DIAMOND
+}
+
+enum LeadStatus {
+  NEW
+  VIEWED
+  CONTACTED
+  IN_PROGRESS
+  WON
+  LOST
+  EXPIRED
+}
+
+enum CommissionStatus {
+  PENDING
+  INVOICED
+  PAID
+  WAIVED
+}
+
+model VendorCategory {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  icon        String
+  description String?
+  image       String?
+  order       Int             @default(0)
+  isActive    Boolean         @default(true)
+  vendors     VendorProfile[]
+  createdAt   DateTime        @default(now())
+}
+
+model VendorProfile {
+  id                String                 @id @default(cuid())
+  userId            String                 @unique
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic Info
+  businessName      String
+  slug              String                 @unique
+  bio               String?                @db.Text
+  shortDescription  String?
+
+  // Category
+  categoryId        String
+  category          VendorCategory         @relation(fields: [categoryId], references: [id])
+  subcategories     String[]
+
+  // Location
+  city              String
+  areasServed       String[]
+
+  // Contact
+  contactPhone      String?
+  contactEmail      String?
+  website           String?
+  instagramUrl      String?
+  facebookUrl       String?
+  tiktokUrl         String?
+  whatsappNumber    String?
+
+  // Media
+  logoUrl           String?
+  coverUrl          String?
+
+  // Business Details
+  priceRangeMin     Int?
+  priceRangeMax     Int?
+  currency          String                 @default("ILS")
+  experienceYears   Int?
+  eventsCompleted   Int?                   @default(0)
+
+  // Availability
+  availabilityNote  String?
+  bookedDates       DateTime[]
+
+  // Flags
+  isFeatured        Boolean                @default(false)
+  isVerified        Boolean                @default(false)
+  status            VendorStatus           @default(DRAFT)
+
+  // Ratings (denormalized)
+  ratingAverage     Float                  @default(0)
+  reviewCount       Int                    @default(0)
+
+  // Subscription
+  subscriptionTier  VendorSubscriptionTier @default(FREE)
+  subscriptionEnds  DateTime?
+
+  // Profile completion
+  completionScore   Int                    @default(0)
+
+  // Relations
+  images            VendorImage[]
+  packages          VendorPackage[]
+  reviews           VendorReview[]
+  leads             VendorLead[]
+  favorites         VendorFavorite[]
+
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([categoryId, status])
+  @@index([city, status])
+  @@index([status, isFeatured])
+  @@index([ratingAverage])
+}
+
+model VendorImage {
+  id        String        @id @default(cuid())
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  url       String
+  publicId  String?
+  caption   String?
+  altText   String?
+  order     Int           @default(0)
+  width     Int?
+  height    Int?
+
+  createdAt DateTime      @default(now())
+
+  @@index([vendorId, order])
+}
+
+model VendorPackage {
+  id          String        @id @default(cuid())
+  vendorId    String
+  vendor      VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?       @db.Text
+  price       Float?
+  currency    String        @default("ILS")
+  features    String[]
+  isPopular   Boolean       @default(false)
+  isActive    Boolean       @default(true)
+  order       Int           @default(0)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([vendorId, order])
+}
+
+model VendorReview {
+  id              String        @id @default(cuid())
+  vendorId        String
+  vendor          VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+
+  rating          Int
+  title           String?
+  text            String?       @db.Text
+  eventType       String?
+  eventDate       DateTime?
+
+  vendorResponse  String?       @db.Text
+  respondedAt     DateTime?
+
+  isVerified      Boolean       @default(false)
+  isPublished     Boolean       @default(true)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([vendorId, userId])
+  @@index([vendorId, isPublished])
+  @@index([rating])
+}
+
+model VendorLead {
+  id               String            @id @default(cuid())
+  vendorId         String
+  vendor           VendorProfile     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User              @relation(fields: [userId], references: [id])
+  eventId          String?
+  event            Event?            @relation(fields: [eventId], references: [id])
+
+  contactName      String
+  contactPhone     String?
+  contactEmail     String?
+  eventDate        DateTime?
+  eventType        String?
+  guestCount       Int?
+  message          String?           @db.Text
+  budget           Float?
+
+  status           LeadStatus        @default(NEW)
+  phoneRevealed    Boolean           @default(false)
+  phoneRevealedAt  DateTime?
+
+  dealAmount       Float?
+  commissionRate   Float?
+  commissionAmount Float?
+  commissionStatus CommissionStatus?
+
+  vendorNotes      String?           @db.Text
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([vendorId, status])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model VendorFavorite {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, vendorId])
+  @@index([userId])
 }
