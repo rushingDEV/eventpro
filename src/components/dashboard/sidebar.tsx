@@ -16,18 +16,22 @@ import {
   Globe,
   ListChecks,
   LogOut,
+  Store,
+  Palette,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 const navItems = [
   { label: "דשבורד", href: "/dashboard", icon: LayoutDashboard },
   { label: "אירועים", href: "/events", icon: CalendarDays },
+  { label: "ספקים", href: "/marketplace", icon: Store },
 ];
 
 const eventNavItems = [
   { label: "מוזמנים", href: "guests", icon: Users },
   { label: "קבוצות", href: "groups", icon: Grid3X3 },
   { label: "הושבה", href: "seating", icon: MapPin },
+  { label: "מעצב חללים", href: "designer", icon: Palette },
   { label: "מתנות", href: "gifts", icon: Gift },
   { label: "תקשורת", href: "communication", icon: MessageSquare },
   { label: "קבלת פנים", href: "reception", icon: ClipboardCheck },
