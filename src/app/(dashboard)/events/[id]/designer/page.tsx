@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
@@ -11,8 +11,8 @@ import { ElementPalette } from "@/components/designer/element-palette";
 import { PropertyInspector } from "@/components/designer/property-inspector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Monitor } from "lucide-react";
-import type { DesignerSaveData } from "@/lib/designer/types";
+import { Monitor, Layers, Maximize2, ZoomIn } from "lucide-react";
+import type { DesignerSaveData, ElementType } from "@/lib/designer/types";
 
 // Dynamic import for Konva (no SSR)
 const DesignerCanvas = dynamic(
@@ -34,6 +34,29 @@ function CanvasLoading() {
   );
 }
 
+// Hebrew labels for element types shown in the status bar breakdown
+const TYPE_LABELS: Partial<Record<ElementType, string>> = {
+  table: "שולחנות",
+  chair: "כיסאות",
+  wall: "קירות",
+  "dance-floor": "רחבות ריקודים",
+  stage: "במות",
+  chuppah: "חופות",
+  bar: "בר",
+  "dj-booth": "עמדת DJ",
+  "flower-arrangement": "סידורי פרחים",
+  lighting: "תאורה",
+  sign: "שלטים",
+  entrance: "כניסות",
+  exit: "יציאות",
+  "photo-booth": "עמדת צילום",
+  "gift-table": "שולחן מתנות",
+  buffet: "מזנון",
+  lounge: "לאונג׳",
+  separator: "מפרידים",
+  custom: "מותאם אישית",
+};
+
 export default function DesignerPage() {
   const { id: eventId } = useParams<{ id: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +66,21 @@ export default function DesignerPage() {
 
   const { loadFromJson, exportToJson, isDirty, markSaved, elements } =
     useDesignerStore();
+
+  // ── Element type breakdown for status bar ──
+  const typeBreakdown = useMemo(() => {
+    const counts: Partial<Record<ElementType, number>> = {};
+    for (const el of elements) {
+      counts[el.type] = (counts[el.type] || 0) + 1;
+    }
+    // Build display string — only show types with count > 0
+    const parts: string[] = [];
+    for (const [type, count] of Object.entries(counts)) {
+      const label = TYPE_LABELS[type as ElementType] || type;
+      parts.push(`${count} ${label}`);
+    }
+    return parts.join(" | ");
+  }, [elements]);
 
   // ── Fetch event data ──
   const { data, isLoading } = useQuery({
@@ -233,10 +271,24 @@ export default function DesignerPage() {
       </div>
 
       {/* Status bar */}
-      <div className="h-7 border-t bg-muted/50 flex items-center px-3 text-[10px] text-muted-foreground gap-4">
-        <span>{elements.length} אלמנטים</span>
-        <span>{useDesignerStore.getState().canvasWidth}×{useDesignerStore.getState().canvasHeight} px</span>
-        <span>{Math.round(useDesignerStore.getState().zoom * 100)}%</span>
+      <div className="h-7 border-t designer-glass flex items-center px-3 text-[10px] text-muted-foreground gap-4">
+        <span className="flex items-center gap-1">
+          <Layers className="h-3 w-3" />
+          {elements.length} אלמנטים
+        </span>
+        <span className="flex items-center gap-1">
+          <Maximize2 className="h-3 w-3" />
+          {useDesignerStore.getState().canvasWidth}×{useDesignerStore.getState().canvasHeight} px
+        </span>
+        <span className="flex items-center gap-1">
+          <ZoomIn className="h-3 w-3" />
+          {Math.round(useDesignerStore.getState().zoom * 100)}%
+        </span>
+        {typeBreakdown && (
+          <span className="hidden md:inline-flex items-center gap-1 border-r pr-3 mr-1 border-muted-foreground/20">
+            {typeBreakdown}
+          </span>
+        )}
         <span className="mr-auto">
           {isDirty ? "שינויים לא שמורים" : "נשמר ✓"}
         </span>

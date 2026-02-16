@@ -1,10 +1,19 @@
 "use client";
 
-import { useCallback, useRef, useEffect, useState } from "react";
-import { Stage, Layer, Rect, Line, Text } from "react-konva";
+import { useCallback, useRef, useEffect, useState, useMemo } from "react";
+import { Stage, Layer, Rect, Line, Text, Circle, Group } from "react-konva";
 import type Konva from "konva";
-import { useDesignerStore } from "@/lib/designer/store";
+import { useDesignerStore, generateElementId } from "@/lib/designer/store";
 import type { DesignerElement } from "@/lib/designer/types";
+import {
+  Copy,
+  Trash2,
+  Lock,
+  Unlock,
+  ArrowUp,
+  ArrowDown,
+  Clipboard,
+} from "lucide-react";
 import {
   TableElement,
   WallElement,
@@ -24,6 +33,15 @@ interface DesignerCanvasProps {
   height: number;
 }
 
+// ── Context menu state ───────────────────────────────────────────────────────
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  elementId: string | null;
+}
+
+// ── Render element by type ───────────────────────────────────────────────────
 function renderElement(
   el: DesignerElement,
   isSelected: boolean,
@@ -66,8 +84,48 @@ function renderElement(
   }
 }
 
+// ── Minimap element color helper ─────────────────────────────────────────────
+function minimapColor(type: string): string {
+  switch (type) {
+    case "table":
+      return "#B89470";
+    case "wall":
+    case "separator":
+      return "#8B8178";
+    case "dance-floor":
+      return "#D4A0D0";
+    case "stage":
+    case "chuppah":
+      return "#E8C468";
+    case "bar":
+    case "buffet":
+    case "dj-booth":
+      return "#6BAED6";
+    case "flower-arrangement":
+    case "lighting":
+    case "sign":
+    case "photo-booth":
+      return "#90C47D";
+    case "entrance":
+    case "exit":
+      return "#E87461";
+    case "lounge":
+    case "gift-table":
+      return "#C4956A";
+    default:
+      return "#A0A0A0";
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DesignerCanvas Component
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Rubber-band selection
   const [selectionRect, setSelectionRect] = useState<{
     x: number;
     y: number;
@@ -76,6 +134,14 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     visible: boolean;
   }>({ x: 0, y: 0, width: 0, height: 0, visible: false });
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    elementId: null,
+  });
 
   const {
     elements,
@@ -104,12 +170,13 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     paste,
     selectAll,
     pushHistory,
+    addElement,
   } = useDesignerStore();
 
   // Sort elements by zIndex for rendering
   const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
 
-  // ── Zoom to pointer ──
+  // ── Zoom to pointer ────────────────────────────────────────────────────────
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
       e.evt.preventDefault();
@@ -134,7 +201,7 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     [zoom, panX, panY, setZoom, setPan],
   );
 
-  // ── Element handlers ──
+  // ── Element handlers ───────────────────────────────────────────────────────
   const handleSelect = useCallback(
     (id: string) => {
       if (activeTool !== "select") return;
@@ -175,7 +242,7 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     [snapToGrid, gridSize, updateElement],
   );
 
-  // ── Stage click (deselect) ──
+  // ── Stage click (deselect) ─────────────────────────────────────────────────
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       if (e.target === e.target.getStage()) {
@@ -185,7 +252,7 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     [clearSelection],
   );
 
-  // ── Rubber-band selection ──
+  // ── Rubber-band selection ──────────────────────────────────────────────────
   const handleStageMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       if (activeTool !== "select") return;
@@ -249,7 +316,7 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     setSelectionRect((prev) => ({ ...prev, visible: false }));
   }, [selectionRect, elements, setSelectedIds]);
 
-  // ── Keyboard shortcuts ──
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -310,9 +377,10 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
         }
       }
 
-      // Escape — deselect
+      // Escape — deselect + close context menu
       if (e.key === "Escape") {
         clearSelection();
+        setContextMenu((prev) => ({ ...prev, visible: false }));
       }
     };
 
@@ -320,7 +388,7 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedIds, elements, deleteElements, undo, redo, copy, paste, selectAll, clearSelection, pushHistory, updateElement]);
 
-  // ── Drop handler (from palette) ──
+  // ── Drop handler (from palette) ────────────────────────────────────────────
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -357,42 +425,148 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     e.dataTransfer.dropEffect = "copy";
   }, []);
 
-  // ── Grid ──
-  const gridLines: React.ReactNode[] = [];
-  if (showGrid) {
-    const cols = Math.ceil(canvasWidth / gridSize) + 2;
-    const rows = Math.ceil(canvasHeight / gridSize) + 2;
-    for (let col = 0; col <= cols; col++) {
-      gridLines.push(
-        <Rect
-          key={`gc-${col}`}
-          x={col * gridSize}
-          y={0}
-          width={1}
-          height={canvasHeight}
-          fill="#D5CFC7"
-          opacity={col % 4 === 0 ? 0.3 : 0.1}
-          listening={false}
-        />,
-      );
-    }
-    for (let row = 0; row <= rows; row++) {
-      gridLines.push(
-        <Rect
-          key={`gr-${row}`}
-          x={0}
-          y={row * gridSize}
-          width={canvasWidth}
-          height={1}
-          fill="#D5CFC7"
-          opacity={row % 4 === 0 ? 0.3 : 0.1}
-          listening={false}
-        />,
-      );
-    }
-  }
+  // ── Context menu handler ───────────────────────────────────────────────────
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const containerEl = containerRef.current;
+      if (!containerEl) return;
 
-  // ── Alignment guides ──
+      const containerRect = containerEl.getBoundingClientRect();
+      const mouseX = e.clientX - containerRect.left;
+      const mouseY = e.clientY - containerRect.top;
+
+      // Determine which element (if any) is under cursor using canvas coords
+      const canvasX = (e.clientX - containerRect.left - panX) / zoom;
+      const canvasY = (e.clientY - containerRect.top - panY) / zoom;
+
+      // Find topmost element under cursor
+      let targetElement: DesignerElement | null = null;
+      for (let i = sortedElements.length - 1; i >= 0; i--) {
+        const el = sortedElements[i];
+        if (!el.visible) continue;
+        if (
+          canvasX >= el.x &&
+          canvasX <= el.x + el.width &&
+          canvasY >= el.y &&
+          canvasY <= el.y + el.height
+        ) {
+          targetElement = el;
+          break;
+        }
+      }
+
+      if (targetElement) {
+        // Select the element if not already selected
+        if (!selectedIds.includes(targetElement.id)) {
+          select(targetElement.id);
+        }
+        setContextMenu({
+          visible: true,
+          x: mouseX,
+          y: mouseY,
+          elementId: targetElement.id,
+        });
+      } else {
+        setContextMenu({ visible: false, x: 0, y: 0, elementId: null });
+      }
+    },
+    [panX, panY, zoom, sortedElements, selectedIds, select],
+  );
+
+  // Close context menu on outside click
+  useEffect(() => {
+    const handleClick = () => {
+      if (contextMenu.visible) {
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      }
+    };
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, [contextMenu.visible]);
+
+  // ── Context menu actions ───────────────────────────────────────────────────
+  const contextMenuActions = useMemo(() => {
+    const elementId = contextMenu.elementId;
+    if (!elementId) return null;
+    const el = elements.find((e) => e.id === elementId);
+    if (!el) return null;
+
+    return {
+      duplicate: () => {
+        pushHistory();
+        addElement({
+          ...el,
+          id: generateElementId(),
+          x: el.x + 20,
+          y: el.y + 20,
+          name: `${el.name} (עותק)`,
+        });
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      },
+      delete: () => {
+        deleteElements([elementId]);
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      },
+      toggleLock: () => {
+        pushHistory();
+        updateElement(elementId, { locked: !el.locked });
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      },
+      bringForward: () => {
+        pushHistory();
+        const maxZ = Math.max(...elements.map((e) => e.zIndex));
+        updateElement(elementId, { zIndex: maxZ + 1 });
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      },
+      sendBackward: () => {
+        pushHistory();
+        const minZ = Math.min(...elements.map((e) => e.zIndex));
+        updateElement(elementId, { zIndex: minZ - 1 });
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      },
+      copyToClipboard: () => {
+        if (!selectedIds.includes(elementId)) {
+          select(elementId);
+        }
+        // Small delay to ensure selection is set before copy
+        setTimeout(() => {
+          copy();
+        }, 0);
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      },
+      isLocked: el.locked,
+    };
+  }, [contextMenu.elementId, elements, selectedIds, pushHistory, addElement, deleteElements, updateElement, select, copy]);
+
+  // ── Dotted grid (circles instead of rects) ────────────────────────────────
+  const gridDots = useMemo(() => {
+    if (!showGrid) return [];
+    const dots: React.ReactNode[] = [];
+    const cols = Math.ceil(canvasWidth / gridSize);
+    const rows = Math.ceil(canvasHeight / gridSize);
+
+    for (let col = 0; col <= cols; col++) {
+      for (let row = 0; row <= rows; row++) {
+        const isMajor = col % 4 === 0 && row % 4 === 0;
+        dots.push(
+          <Circle
+            key={`gd-${col}-${row}`}
+            x={col * gridSize}
+            y={row * gridSize}
+            radius={isMajor ? 2.5 : 1.5}
+            fill={isMajor ? "#B0A090" : "#C8BAA8"}
+            opacity={isMajor ? 0.5 : 0.4}
+            listening={false}
+            perfectDrawEnabled={false}
+          />,
+        );
+      }
+    }
+    return dots;
+  }, [showGrid, canvasWidth, canvasHeight, gridSize]);
+
+  // ── Alignment guides ───────────────────────────────────────────────────────
   const guideLines = guides.map((guide, i) =>
     guide.type === "vertical" ? (
       <Line key={`guide-${i}`} points={[guide.position, 0, guide.position, canvasHeight]} stroke="#3B82F6" strokeWidth={1} dash={[4, 4]} listening={false} />
@@ -401,12 +575,27 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
     ),
   );
 
+  // ── Minimap calculations ───────────────────────────────────────────────────
+  const MINIMAP_W = 160;
+  const MINIMAP_H = 110;
+  const minimapScaleX = MINIMAP_W / canvasWidth;
+  const minimapScaleY = MINIMAP_H / canvasHeight;
+  const minimapScale = Math.min(minimapScaleX, minimapScaleY);
+
+  // Current viewport rect in canvas coordinates
+  const viewportX = -panX / zoom;
+  const viewportY = -panY / zoom;
+  const viewportW = width / zoom;
+  const viewportH = height / zoom;
+
   return (
     <div
+      ref={containerRef}
       className="designer-canvas-container border rounded-xl overflow-hidden relative flex-1"
       style={{ backgroundColor: BG_COLOR, width, height }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      onContextMenu={handleContextMenu}
     >
       <Stage
         ref={stageRef}
@@ -429,28 +618,63 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
         }}
       >
         <Layer>
-          {/* Canvas boundary */}
-          <Rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill="#FFFFFF" stroke="#E5E0D8" strokeWidth={1} listening={false} />
+          {/* Canvas boundary with shadow */}
+          <Rect
+            x={0}
+            y={0}
+            width={canvasWidth}
+            height={canvasHeight}
+            fill="#FFFFFF"
+            stroke="#E5E0D8"
+            strokeWidth={1}
+            shadowBlur={20}
+            shadowColor="rgba(0,0,0,0.08)"
+            shadowOffsetX={0}
+            shadowOffsetY={4}
+            listening={false}
+          />
 
-          {/* Grid */}
-          {gridLines}
+          {/* Dotted grid */}
+          {gridDots}
 
           {/* Alignment guides */}
           {guideLines}
 
-          {/* Empty state */}
+          {/* Enhanced empty state */}
           {elements.length === 0 && (
-            <Text
-              text="גררו אלמנטים מהפאנל השמאלי לכאן"
-              fontSize={16}
-              fontFamily="Heebo, sans-serif"
-              fill="#9CA3AF"
-              align="center"
-              x={canvasWidth / 2 - 150}
-              y={canvasHeight / 2 - 10}
-              width={300}
-              listening={false}
-            />
+            <Group x={canvasWidth / 2} y={canvasHeight / 2 - 40} listening={false}>
+              {/* Layout icon — stylized grid */}
+              <Rect x={-28} y={-28} width={22} height={22} cornerRadius={4} fill="#D5CFC7" opacity={0.6} />
+              <Rect x={-2} y={-28} width={30} height={22} cornerRadius={4} fill="#C8BAA8" opacity={0.5} />
+              <Rect x={-28} y={-2} width={30} height={16} cornerRadius={4} fill="#C8BAA8" opacity={0.5} />
+              <Rect x={6} y={-2} width={22} height={16} cornerRadius={4} fill="#D5CFC7" opacity={0.6} />
+
+              {/* Primary CTA text */}
+              <Text
+                text="התחילו לעצב"
+                fontSize={22}
+                fontFamily="Heebo, sans-serif"
+                fontStyle="bold"
+                fill="#6B6054"
+                align="center"
+                x={-120}
+                y={30}
+                width={240}
+                listening={false}
+              />
+              {/* Secondary hint text */}
+              <Text
+                text="גררו אלמנטים מהפאנל השמאלי"
+                fontSize={14}
+                fontFamily="Heebo, sans-serif"
+                fill="#A39888"
+                align="center"
+                x={-140}
+                y={58}
+                width={280}
+                listening={false}
+              />
+            </Group>
           )}
 
           {/* Elements */}
@@ -474,6 +698,122 @@ export function DesignerCanvas({ width, height }: DesignerCanvasProps) {
           )}
         </Layer>
       </Stage>
+
+      {/* ── Context Menu (HTML overlay) ────────────────────────────────────── */}
+      {contextMenu.visible && contextMenuActions && (
+        <div
+          className="designer-context-menu"
+          style={{
+            top: contextMenu.y,
+            left: contextMenu.x,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={contextMenuActions.duplicate}>
+            <Copy size={14} />
+            <span>שכפל</span>
+          </button>
+          <button onClick={contextMenuActions.copyToClipboard}>
+            <Clipboard size={14} />
+            <span>העתק</span>
+          </button>
+
+          <div className="separator" />
+
+          <button onClick={contextMenuActions.toggleLock}>
+            {contextMenuActions.isLocked ? <Unlock size={14} /> : <Lock size={14} />}
+            <span>{contextMenuActions.isLocked ? "בטל נעילה" : "נעל"}</span>
+          </button>
+
+          <div className="separator" />
+
+          <button onClick={contextMenuActions.bringForward}>
+            <ArrowUp size={14} />
+            <span>הבא קדימה</span>
+          </button>
+          <button onClick={contextMenuActions.sendBackward}>
+            <ArrowDown size={14} />
+            <span>שלח אחורה</span>
+          </button>
+
+          <div className="separator" />
+
+          <button onClick={contextMenuActions.delete}>
+            <Trash2 size={14} />
+            <span>מחק</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Minimap (HTML + SVG overlay) ───────────────────────────────────── */}
+      <div className="designer-minimap">
+        <svg
+          width={MINIMAP_W}
+          height={MINIMAP_H}
+          viewBox={`0 0 ${MINIMAP_W} ${MINIMAP_H}`}
+          style={{ display: "block" }}
+        >
+          {/* Canvas background */}
+          <rect
+            x={0}
+            y={0}
+            width={canvasWidth * minimapScale}
+            height={canvasHeight * minimapScale}
+            fill="#FFFFFF"
+            opacity={0.6}
+          />
+
+          {/* Elements as colored dots / rects */}
+          {sortedElements.map((el) => {
+            if (!el.visible) return null;
+            const ex = el.x * minimapScale;
+            const ey = el.y * minimapScale;
+            const ew = Math.max(el.width * minimapScale, 3);
+            const eh = Math.max(el.height * minimapScale, 3);
+            const color = minimapColor(el.type);
+
+            // Round tables as circles
+            if (el.type === "table" && el.metadata?.tableShape === "ROUND") {
+              const r = Math.max(ew, eh) / 2;
+              return (
+                <circle
+                  key={`mm-${el.id}`}
+                  cx={ex + ew / 2}
+                  cy={ey + eh / 2}
+                  r={r}
+                  fill={color}
+                  opacity={0.8}
+                />
+              );
+            }
+
+            return (
+              <rect
+                key={`mm-${el.id}`}
+                x={ex}
+                y={ey}
+                width={ew}
+                height={eh}
+                rx={1}
+                fill={color}
+                opacity={0.8}
+              />
+            );
+          })}
+
+          {/* Viewport rectangle */}
+          <rect
+            x={Math.max(0, viewportX * minimapScale)}
+            y={Math.max(0, viewportY * minimapScale)}
+            width={Math.min(viewportW * minimapScale, MINIMAP_W)}
+            height={Math.min(viewportH * minimapScale, MINIMAP_H)}
+            fill="rgba(59,130,246,0.08)"
+            stroke="rgba(59,130,246,0.5)"
+            strokeWidth={1.5}
+            rx={2}
+          />
+        </svg>
+      </div>
     </div>
   );
 }

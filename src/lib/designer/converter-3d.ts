@@ -14,6 +14,12 @@ export interface Element3D {
   geometry: "box" | "cylinder" | "plane" | "sphere";
   children?: Element3D[];
   metadata?: Record<string, unknown>;
+  material?: {
+    roughness?: number;
+    metalness?: number;
+    transparent?: boolean;
+    opacity?: number;
+  };
 }
 
 const SCALE_FACTOR = 0.01; // Convert from px to 3D units
@@ -92,6 +98,21 @@ function convertTable(el: DesignerElement, x: number, z: number, w: number, h: n
     geometry: isRound ? "cylinder" : "box",
   });
 
+  // Tablecloth — slightly larger, slightly lower, semi-transparent white
+  const clothScale: [number, number, number] = isRound
+    ? [r * 1.05, 0.025, r * 1.05]
+    : [w * 1.05, 0.025, h * 1.05];
+  elements.push({
+    id: `${el.id}-tablecloth`,
+    type: "tablecloth",
+    position: [x, tableHeight - 0.005, z],
+    rotation: [0, rotY, 0],
+    scale: clothScale,
+    color: "#FFFFFF",
+    geometry: isRound ? "cylinder" : "box",
+    material: { roughness: 0.9, metalness: 0, transparent: true, opacity: 0.3 },
+  });
+
   // Table legs
   const legRadius = 0.015;
   const legPositions: [number, number][] = isRound
@@ -110,35 +131,63 @@ function convertTable(el: DesignerElement, x: number, z: number, w: number, h: n
     });
   }
 
-  // Chairs (simple cylinders)
+  // Detailed chairs
   const capacity = meta.capacity || 8;
   const chairDistance = isRound ? r + 0.15 : Math.max(w, h) / 2 + 0.15;
   for (let i = 0; i < capacity; i++) {
     const angle = (2 * Math.PI * i) / capacity;
     const cx = x + Math.cos(angle) * chairDistance;
     const cz = z + Math.sin(angle) * chairDistance;
+    const chairMaterial = { roughness: 0.6, metalness: 0.05 };
 
-    // Chair seat
+    // Chair seat — box 0.04 x 0.005 x 0.04 at y=0.45
     elements.push({
-      id: `${el.id}-chair-${i}`,
-      type: "chair",
-      position: [cx, 0.22, cz],
+      id: `${el.id}-chair-seat-${i}`,
+      type: "chair-seat",
+      position: [cx, 0.45, cz],
       rotation: [0, -angle, 0],
-      scale: [0.04, 0.02, 0.04],
+      scale: [0.04, 0.005, 0.04],
       color: "#E8E0D4",
-      geometry: "cylinder",
+      geometry: "box",
+      material: chairMaterial,
     });
 
-    // Chair back
+    // Chair backrest — box 0.04 x 0.08 x 0.005, tilted slightly (~5 deg), at y=0.52
+    const backTilt = 0.09; // ~5 degrees tilt backward
     elements.push({
       id: `${el.id}-chair-back-${i}`,
       type: "chair-back",
-      position: [cx + Math.cos(angle) * 0.03, 0.35, cz + Math.sin(angle) * 0.03],
-      rotation: [0, -angle, 0],
-      scale: [0.04, 0.12, 0.005],
+      position: [cx + Math.cos(angle) * 0.018, 0.52, cz + Math.sin(angle) * 0.018],
+      rotation: [Math.cos(-angle) * backTilt, -angle, Math.sin(-angle) * backTilt],
+      scale: [0.04, 0.08, 0.005],
       color: "#D7CCC8",
       geometry: "box",
+      material: chairMaterial,
     });
+
+    // 4 chair legs — thin cylinders (radius=0.005, height=0.45)
+    const chairLegOffsets: [number, number][] = [
+      [-0.015, -0.015],
+      [0.015, -0.015],
+      [-0.015, 0.015],
+      [0.015, 0.015],
+    ];
+    for (let li = 0; li < chairLegOffsets.length; li++) {
+      const [dlx, dlz] = chairLegOffsets[li];
+      // Rotate leg offset around the chair angle
+      const rotatedDlx = dlx * Math.cos(-angle) - dlz * Math.sin(-angle);
+      const rotatedDlz = dlx * Math.sin(-angle) + dlz * Math.cos(-angle);
+      elements.push({
+        id: `${el.id}-chair-leg-${i}-${li}`,
+        type: "chair-leg",
+        position: [cx + rotatedDlx, 0.225, cz + rotatedDlz],
+        rotation: [0, 0, 0],
+        scale: [0.005, 0.45, 0.005],
+        color: "#5D4037",
+        geometry: "cylinder",
+        material: chairMaterial,
+      });
+    }
   }
 
   return elements;
@@ -171,6 +220,7 @@ function convertDanceFloor(el: DesignerElement, x: number, z: number, w: number,
     color: el.style.fill || "#2D2D2D",
     emissive: meta.hasLedGrid ? "#111133" : undefined,
     geometry: meta.shape === "circle" ? "cylinder" : "box",
+    material: { roughness: 0.1, metalness: 0.3 },
   }];
 }
 
@@ -190,6 +240,37 @@ function convertStage(el: DesignerElement, x: number, z: number, w: number, h: n
     color: el.style.fill || (isChuppah ? "#F5E6D3" : "#4A4A4A"),
     geometry: "box",
   });
+
+  // Stage stairs — 3 steps in front of the stage
+  if (!isChuppah) {
+    const stairCount = 3;
+    const stairDepth = 0.08;
+    const stairHeightStep = stageHeight / stairCount;
+    const baseColor = el.style.fill || "#4A4A4A";
+
+    for (let si = 0; si < stairCount; si++) {
+      const stepY = stageHeight - stairHeightStep * (si + 1) + stairHeightStep / 2;
+      const stepZ = z + h / 2 + stairDepth * (si + 0.5);
+      const stepW = w + 0.02 * (si + 1); // Each step slightly wider
+
+      // Lighten the color for stairs
+      const lightenAmount = (si + 1) * 15;
+      const r = Math.min(255, parseInt(baseColor.slice(1, 3), 16) + lightenAmount);
+      const g = Math.min(255, parseInt(baseColor.slice(3, 5), 16) + lightenAmount);
+      const b = Math.min(255, parseInt(baseColor.slice(5, 7), 16) + lightenAmount);
+      const stepColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+
+      elements.push({
+        id: `${el.id}-stair-${si}`,
+        type: "stage-stair",
+        position: [x, stepY, stepZ],
+        rotation: [0, rotY, 0],
+        scale: [stepW, stairHeightStep, stairDepth],
+        color: stepColor,
+        geometry: "box",
+      });
+    }
+  }
 
   // Chuppah poles
   if (isChuppah) {
@@ -213,7 +294,7 @@ function convertStage(el: DesignerElement, x: number, z: number, w: number, h: n
       });
     }
 
-    // Canopy (flat plane on top)
+    // Canopy (flat plane on top) with fabric material
     elements.push({
       id: `${el.id}-canopy`,
       type: "chuppah-canopy",
@@ -223,6 +304,7 @@ function convertStage(el: DesignerElement, x: number, z: number, w: number, h: n
       color: "#FFFFFF",
       geometry: "box",
       metadata: { transparent: true, opacity: 0.6 },
+      material: { roughness: 0.95, metalness: 0, transparent: true, opacity: 0.5 },
     });
   }
 
@@ -256,18 +338,48 @@ function convertBar(el: DesignerElement, x: number, z: number, w: number, h: num
     geometry: "box",
   });
 
-  // Stools
+  // Detailed bar stools
   const stoolCount = meta.stoolCount || 4;
+  const stoolMaterial = { roughness: 0.3, metalness: 0.6 };
+
   for (let i = 0; i < stoolCount; i++) {
     const sx = x - w / 2 + (w / (stoolCount + 1)) * (i + 1);
+    const sz = z + h / 2 + 0.1;
+
+    // Stool seat disk — cylinder (radius=0.04, height=0.02) at y=0.7
     elements.push({
-      id: `${el.id}-stool-${i}`,
-      type: "stool",
-      position: [sx, 0.35, z + h / 2 + 0.1],
+      id: `${el.id}-stool-seat-${i}`,
+      type: "stool-seat",
+      position: [sx, 0.7, sz],
       rotation: [0, 0, 0],
-      scale: [0.03, 0.02, 0.03],
+      scale: [0.04, 0.02, 0.04],
       color: "#8D8D8D",
       geometry: "cylinder",
+      material: stoolMaterial,
+    });
+
+    // Stool stem — thin cylinder (radius=0.008, height=0.5)
+    elements.push({
+      id: `${el.id}-stool-stem-${i}`,
+      type: "stool-stem",
+      position: [sx, 0.44, sz],
+      rotation: [0, 0, 0],
+      scale: [0.008, 0.5, 0.008],
+      color: "#707070",
+      geometry: "cylinder",
+      material: stoolMaterial,
+    });
+
+    // Stool base — flat cylinder (radius=0.05, height=0.01)
+    elements.push({
+      id: `${el.id}-stool-base-${i}`,
+      type: "stool-base",
+      position: [sx, 0.005, sz],
+      rotation: [0, 0, 0],
+      scale: [0.05, 0.01, 0.05],
+      color: "#606060",
+      geometry: "cylinder",
+      material: stoolMaterial,
     });
   }
 

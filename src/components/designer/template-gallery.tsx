@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -237,6 +237,119 @@ function generateCorporateTemplate(): DesignerElement[] {
   return els;
 }
 
+// ── Procedural Thumbnail Component ──────────────────────────────────────────
+
+function TemplateThumbnail({
+  template,
+}: {
+  template: DesignerTemplate;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const thumbW = 200;
+    const thumbH = 128;
+
+    const scaleX = thumbW / template.canvasWidth;
+    const scaleY = thumbH / template.canvasHeight;
+    const scale = Math.min(scaleX, scaleY) * 0.85;
+
+    const offsetX = (thumbW - template.canvasWidth * scale) / 2;
+    const offsetY = (thumbH - template.canvasHeight * scale) / 2;
+
+    // Background
+    ctx.fillStyle = "#FAF8F5";
+    ctx.fillRect(0, 0, thumbW, thumbH);
+
+    // Draw a subtle border for the canvas area
+    ctx.strokeStyle = "#E8E0D8";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+      offsetX,
+      offsetY,
+      template.canvasWidth * scale,
+      template.canvasHeight * scale,
+    );
+
+    // Draw elements
+    for (const el of template.elements) {
+      const ex = offsetX + el.x * scale;
+      const ey = offsetY + el.y * scale;
+      const ew = el.width * scale;
+      const eh = el.height * scale;
+
+      switch (el.type) {
+        case "table": {
+          // Tables as small brown circles
+          ctx.fillStyle = "#8B7355";
+          ctx.beginPath();
+          ctx.arc(ex, ey, Math.max(ew / 2, 3), 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case "dance-floor": {
+          // Dance floor as dark rectangle
+          ctx.fillStyle = "#2D2D2D";
+          ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, eh);
+          break;
+        }
+        case "stage": {
+          // Stage as dark gray rectangle
+          ctx.fillStyle = "#4A4A4A";
+          ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, eh);
+          break;
+        }
+        case "bar": {
+          // Bar as brown rectangle
+          ctx.fillStyle = "#5C4033";
+          ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, eh);
+          break;
+        }
+        case "entrance": {
+          // Entrance as green dot
+          ctx.fillStyle = "#22C55E";
+          ctx.beginPath();
+          ctx.arc(ex, ey, Math.max(ew / 2, 3), 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case "chuppah": {
+          // Chuppah as light tan rectangle
+          ctx.fillStyle = "#F5E6D3";
+          ctx.strokeStyle = "#C8A882";
+          ctx.lineWidth = 1;
+          ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, eh);
+          ctx.strokeRect(ex - ew / 2, ey - eh / 2, ew, eh);
+          break;
+        }
+        default: {
+          // Generic element as gray rectangle
+          ctx.fillStyle = el.style?.fill || "#999";
+          ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, eh);
+          break;
+        }
+      }
+    }
+  }, [template]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={200}
+      height={128}
+      className="w-full h-full rounded-lg"
+    />
+  );
+}
+
+// ── Template Gallery ────────────────────────────────────────────────────────
+
 interface TemplateGalleryProps {
   trigger?: React.ReactNode;
 }
@@ -283,12 +396,12 @@ export function TemplateGallery({ trigger }: TemplateGalleryProps) {
           {TEMPLATES.map((template) => (
             <Card
               key={template.id}
-              className="cursor-pointer hover:border-primary/50 transition-colors"
+              className="cursor-pointer hover:border-primary/50 hover:shadow-lg hover:scale-[1.02] transition-all duration-200"
               onClick={() => handleSelectTemplate(template)}
             >
               <CardContent className="p-4">
-                <div className="h-28 bg-muted rounded-lg mb-3 flex items-center justify-center">
-                  <LayoutTemplate className="h-10 w-10 text-muted-foreground" />
+                <div className="h-28 bg-[#FAF8F5] rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                  <TemplateThumbnail template={template} />
                 </div>
                 <h4 className="font-bold text-sm">{template.name}</h4>
                 {template.description && (

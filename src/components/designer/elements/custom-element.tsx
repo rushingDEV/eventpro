@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { Group, Rect, Circle, Text, Transformer } from "react-konva";
 import type { DesignerElement } from "@/lib/designer/types";
 import type Konva from "konva";
@@ -22,6 +22,7 @@ export function CustomElement({
 }: CustomElementProps) {
   const groupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
+  const [hovered, setHovered] = useState(false);
   const customShape = (element.metadata.customShape as string) || "rect";
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function CustomElement({
   const r = Math.min(w, h) / 2;
   const fill = element.style.fill || "#E8E0D4";
   const stroke = isSelected ? "#F5D0A9" : element.style.stroke || "#B0A090";
+  const innerStroke = isSelected ? "#E8D5C0" : "#C8BAA8";
 
   return (
     <>
@@ -65,31 +67,61 @@ export function CustomElement({
         onTap={() => onSelect(element.id)}
         onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
         onTransformEnd={handleTransformEnd}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         {customShape === "circle" ? (
-          <Circle
-            radius={r}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={isSelected ? 3 : 1.5}
-            shadowColor="rgba(0,0,0,0.15)"
-            shadowBlur={4}
-            shadowOffsetY={2}
-          />
+          <>
+            {/* Main shape */}
+            <Circle
+              radius={r}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={isSelected ? 3 : 1.5}
+              shadowColor="rgba(0,0,0,0.15)"
+              shadowBlur={hovered ? 8 : 4}
+              shadowOffsetY={2}
+            />
+            {/* Inner border for visual depth */}
+            <Circle
+              radius={r - 3}
+              fill="transparent"
+              stroke={innerStroke}
+              strokeWidth={0.8}
+              opacity={0.5}
+              listening={false}
+            />
+          </>
         ) : (
-          <Rect
-            x={-w / 2}
-            y={-h / 2}
-            width={w}
-            height={h}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={isSelected ? 3 : 1.5}
-            cornerRadius={4}
-            shadowColor="rgba(0,0,0,0.15)"
-            shadowBlur={4}
-            shadowOffsetY={2}
-          />
+          <>
+            {/* Main shape */}
+            <Rect
+              x={-w / 2}
+              y={-h / 2}
+              width={w}
+              height={h}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={isSelected ? 3 : 1.5}
+              cornerRadius={4}
+              shadowColor="rgba(0,0,0,0.15)"
+              shadowBlur={hovered ? 8 : 4}
+              shadowOffsetY={2}
+            />
+            {/* Inner border for visual depth */}
+            <Rect
+              x={-w / 2 + 3}
+              y={-h / 2 + 3}
+              width={w - 6}
+              height={h - 6}
+              fill="transparent"
+              stroke={innerStroke}
+              strokeWidth={0.8}
+              cornerRadius={2}
+              opacity={0.5}
+              listening={false}
+            />
+          </>
         )}
 
         {/* Label */}

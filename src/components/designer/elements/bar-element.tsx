@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
-import { Group, Rect, Circle, Text, Transformer } from "react-konva";
+import { useRef, useEffect, useCallback, useState } from "react";
+import { Group, Rect, Circle, Text, Line, Transformer } from "react-konva";
 import type { DesignerElement, BarMetadata } from "@/lib/designer/types";
 import type Konva from "konva";
 
@@ -22,6 +22,7 @@ export function BarElement({
 }: BarElementProps) {
   const groupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
+  const [hovered, setHovered] = useState(false);
   const meta = element.metadata as unknown as BarMetadata;
   const stoolCount = meta.stoolCount || 4;
   const barType = meta.barType || "cocktail";
@@ -51,17 +52,25 @@ export function BarElement({
 
   const w = element.width;
   const h = element.height;
-  const fill = element.style.fill || "#5C4033";
+  const bodyFill = element.style.fill || "#4A3728";
+  const counterFill = "#6B5344";
   const stroke = isSelected ? "#F5D0A9" : element.style.stroke || "#3E2723";
-  const icon = barType === "buffet" ? "🍽️" : "🍸";
   const label = element.name || (barType === "buffet" ? "בופה" : "בר");
+  const shadowBlur = hovered ? 16 : 8;
+
+  // Counter overhang dimensions
+  const overhangX = 6; // extends this far beyond body on each side
+  const counterHeight = 8;
 
   // Stool positions along the front of the bar
   const stools: { x: number; y: number }[] = [];
   for (let i = 0; i < stoolCount; i++) {
     const x = -w / 2 + (w / (stoolCount + 1)) * (i + 1);
-    stools.push({ x, y: h / 2 + 14 });
+    stools.push({ x, y: h / 2 + 18 });
   }
+
+  // Glass decoration colors
+  const glassColors = ["#88CCEE", "#FFAA66", "#AADDAA"];
 
   return (
     <>
@@ -75,70 +84,148 @@ export function BarElement({
         onTap={() => onSelect(element.id)}
         onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
         onTransformEnd={handleTransformEnd}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        {/* Shadow */}
+        {/* Shadow / glow */}
         <Rect
-          x={-w / 2}
-          y={-h / 2}
-          width={w}
-          height={h}
+          x={-w / 2 - overhangX}
+          y={-h / 2 - 2}
+          width={w + overhangX * 2}
+          height={h + 4}
           fill="transparent"
-          shadowColor="rgba(0,0,0,0.2)"
-          shadowBlur={8}
+          shadowColor={hovered ? "rgba(245,208,169,0.3)" : "rgba(0,0,0,0.25)"}
+          shadowBlur={shadowBlur}
           shadowOffsetY={3}
-        />
-
-        {/* Bar counter */}
-        <Rect
-          x={-w / 2}
-          y={-h / 2}
-          width={w}
-          height={h}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={isSelected ? 3 : 2}
-          cornerRadius={4}
-        />
-
-        {/* Counter top (lighter strip) */}
-        <Rect
-          x={-w / 2 + 2}
-          y={-h / 2 + 2}
-          width={w - 4}
-          height={6}
-          fill="#8B7355"
-          cornerRadius={2}
-          opacity={0.6}
           listening={false}
         />
 
-        {/* Stools */}
-        {stools.map((stool, i) => (
-          <Circle
-            key={i}
-            x={stool.x}
-            y={stool.y}
-            radius={7}
-            fill="#8D8D8D"
-            stroke="#6B6B6B"
-            strokeWidth={1}
-            listening={false}
-          />
-        ))}
+        {/* Bar body (darker, narrower) */}
+        <Rect
+          x={-w / 2}
+          y={-h / 2}
+          width={w}
+          height={h}
+          fill={bodyFill}
+          stroke={stroke}
+          strokeWidth={isSelected ? 3 : 2}
+          cornerRadius={3}
+        />
 
-        {/* Icon */}
-        <Text text={icon} fontSize={18} align="center" x={-10} y={-12} listening={false} />
+        {/* Wood grain lines on body */}
+        <Line
+          points={[-w / 2 + 4, -h / 2 + h * 0.3, w / 2 - 4, -h / 2 + h * 0.3]}
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth={1}
+          listening={false}
+        />
+        <Line
+          points={[-w / 2 + 4, -h / 2 + h * 0.6, w / 2 - 4, -h / 2 + h * 0.6]}
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth={1}
+          listening={false}
+        />
 
-        {/* Label */}
+        {/* Counter top (lighter, wider — overhang effect) */}
+        <Rect
+          x={-w / 2 - overhangX}
+          y={-h / 2 - counterHeight / 2}
+          width={w + overhangX * 2}
+          height={counterHeight}
+          fill={counterFill}
+          stroke="#7D6555"
+          strokeWidth={1}
+          cornerRadius={2}
+          listening={false}
+        />
+
+        {/* Counter surface highlight */}
+        <Rect
+          x={-w / 2 - overhangX + 2}
+          y={-h / 2 - counterHeight / 2 + 1}
+          width={w + overhangX * 2 - 4}
+          height={2}
+          fill="rgba(255,255,255,0.1)"
+          cornerRadius={1}
+          listening={false}
+        />
+
+        {/* Glass decorations on counter surface */}
+        {glassColors.map((color, i) => {
+          const gx = -w / 4 + (i * w) / 4;
+          const gy = -h / 2 - counterHeight / 2 + counterHeight / 2;
+          return (
+            <Circle
+              key={`glass-${i}`}
+              x={gx}
+              y={gy}
+              radius={3}
+              fill={color}
+              opacity={0.6}
+              stroke="rgba(255,255,255,0.2)"
+              strokeWidth={0.5}
+              listening={false}
+            />
+          );
+        })}
+
+        {/* Detailed stools: seat circle + stem line + base circle */}
+        {stools.map((stool, i) => {
+          const seatY = stool.y;
+          const stemLength = 8;
+          const baseY = seatY + stemLength;
+          return (
+            <Group key={`stool-${i}`} listening={false}>
+              {/* Seat */}
+              <Circle
+                x={stool.x}
+                y={seatY}
+                radius={6}
+                fill="#9E9E9E"
+                stroke="#757575"
+                strokeWidth={1}
+                listening={false}
+              />
+              {/* Seat cushion highlight */}
+              <Circle
+                x={stool.x}
+                y={seatY - 1}
+                radius={3.5}
+                fill="rgba(255,255,255,0.1)"
+                listening={false}
+              />
+              {/* Stem */}
+              <Line
+                points={[stool.x, seatY + 6, stool.x, baseY]}
+                stroke="#757575"
+                strokeWidth={2}
+                listening={false}
+              />
+              {/* Base */}
+              <Circle
+                x={stool.x}
+                y={baseY}
+                radius={4}
+                fill="#6B6B6B"
+                stroke="#555"
+                strokeWidth={0.5}
+                listening={false}
+              />
+            </Group>
+          );
+        })}
+
+        {/* Label text (replaces emoji) */}
         <Text
           text={label}
-          fontSize={9}
-          fontFamily="Heebo, sans-serif"
+          fontSize={11}
+          fontStyle="bold"
+          fontFamily="Heebo, Arial, sans-serif"
           fill="#D7CCC8"
           align="center"
-          x={-30}
-          y={h / 2 + 28}
-          width={60}
+          x={-w / 2}
+          y={-h / 2 + (h - 11) / 2}
+          width={w}
           listening={false}
         />
       </Group>

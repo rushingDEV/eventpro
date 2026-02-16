@@ -152,3 +152,166 @@
     background-clip: text;
   }
 }
+
+/* ── Designer Premium Utilities ─────────────────────── */
+
+/* Glass morphism panel */
+.designer-glass {
+  background: oklch(1 0 0 / 82%);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  border: 1px solid oklch(0.91 0.012 80 / 60%);
+}
+.dark .designer-glass {
+  background: oklch(0.18 0.01 50 / 82%);
+  border: 1px solid oklch(1 0 0 / 10%);
+}
+
+/* Active tool glow ring */
+.tool-active-glow {
+  box-shadow: 0 0 0 2px oklch(0.45 0.16 350 / 30%), 0 0 10px oklch(0.45 0.16 350 / 15%);
+  background: oklch(0.45 0.16 350 / 10%);
+}
+
+/* Keyboard shortcut badge */
+.kbd-badge {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: oklch(0.96 0.01 80);
+  border: 1px solid oklch(0.88 0.012 80);
+  color: oklch(0.45 0.015 50);
+  font-family: var(--font-mono);
+  line-height: 1.3;
+  margin-inline-start: 4px;
+}
+
+/* Category accent bars */
+.cat-accent-seating { border-inline-end: 3px solid oklch(0.55 0.2 350); }
+.cat-accent-structure { border-inline-end: 3px solid oklch(0.6 0.02 50); }
+.cat-accent-central { border-inline-end: 3px solid oklch(0.72 0.15 85); }
+.cat-accent-food-drink { border-inline-end: 3px solid oklch(0.5 0.1 50); }
+.cat-accent-decoration { border-inline-end: 3px solid oklch(0.55 0.18 300); }
+.cat-accent-furniture { border-inline-end: 3px solid oklch(0.6 0.1 155); }
+
+/* Section collapse animation */
+.section-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms ease;
+}
+.section-collapse.open {
+  grid-template-rows: 1fr;
+}
+.section-collapse > * {
+  overflow: hidden;
+}
+
+/* Save pulse */
+@keyframes save-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.save-pulse { animation: save-pulse 1.5s ease-in-out infinite; }
+
+/* VIP sparkle */
+@keyframes sparkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+.sparkle { animation: sparkle 2s ease-in-out infinite; }
+
+/* Minimap overlay */
+.designer-minimap {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 160px;
+  height: 110px;
+  border-radius: 8px;
+  border: 1px solid oklch(0.91 0.012 80 / 60%);
+  background: oklch(1 0 0 / 88%);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  pointer-events: all;
+  z-index: 20;
+}
+
+/* Context menu */
+.designer-context-menu {
+  position: absolute;
+  min-width: 180px;
+  border-radius: 8px;
+  padding: 4px;
+  background: oklch(1 0 0 / 92%);
+  backdrop-filter: blur(16px) saturate(1.6);
+  border: 1px solid oklch(0.91 0.012 80 / 70%);
+  box-shadow: 0 8px 30px oklch(0 0 0 / 12%), 0 2px 8px oklch(0 0 0 / 6%);
+  z-index: 50;
+}
+.designer-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: oklch(0.25 0.02 50);
+  transition: background 150ms;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.designer-context-menu button:hover {
+  background: oklch(0.45 0.16 350 / 8%);
+}
+.designer-context-menu .separator {
+  height: 1px;
+  margin: 3px 6px;
+  background: oklch(0.91 0.012 80 / 60%);
+}
+
+/* Segmented control */
+.segmented-control {
+  display: flex;
+  gap: 2px;
+  background: oklch(0.96 0.01 80);
+  border-radius: 8px;
+  padding: 2px;
+}
+.segmented-control button {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 200ms;
+  background: transparent;
+  color: oklch(0.5 0.015 50);
+}
+.segmented-control button.active {
+  background: white;
+  color: oklch(0.25 0.02 50);
+  box-shadow: 0 1px 3px oklch(0 0 0 / 8%);
+}
+
+/* Color swatch */
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+.color-swatch.active {
+  border-color: oklch(0.45 0.16 350);
+  box-shadow: 0 0 0 2px oklch(0.45 0.16 350 / 30%);
+}

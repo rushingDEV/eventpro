@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Suspense, useMemo, useState, useRef, useEffect } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Environment, Grid, ContactShadows } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { useDesignerStore } from "@/lib/designer/store";
 import { convertTo3D, type Element3D } from "@/lib/designer/converter-3d";
 import { Button } from "@/components/ui/button";
@@ -27,8 +28,12 @@ const LIGHTING_PRESETS = [
 function Element3DRenderer({ el }: { el: Element3D }) {
   const color = new THREE.Color(el.color);
   const emissiveColor = el.emissive ? new THREE.Color(el.emissive) : undefined;
-  const isTransparent = (el.metadata?.transparent as boolean) || false;
-  const opacity = (el.metadata?.opacity as number) ?? 1;
+
+  // PBR material: prefer el.material fields, fall back to legacy metadata, then defaults
+  const matRoughness = el.material?.roughness ?? 0.7;
+  const matMetalness = el.material?.metalness ?? 0.1;
+  const matTransparent = el.material?.transparent ?? (el.metadata?.transparent as boolean) ?? false;
+  const matOpacity = el.material?.opacity ?? (el.metadata?.opacity as number) ?? 1;
 
   const geometryNode = useMemo(() => {
     switch (el.geometry) {
@@ -57,10 +62,10 @@ function Element3DRenderer({ el }: { el: Element3D }) {
           color={color}
           emissive={emissiveColor}
           emissiveIntensity={emissiveColor ? 0.5 : 0}
-          transparent={isTransparent}
-          opacity={opacity}
-          roughness={0.7}
-          metalness={0.1}
+          transparent={matTransparent}
+          opacity={matOpacity}
+          roughness={matRoughness}
+          metalness={matMetalness}
         />
       </mesh>
 
@@ -78,6 +83,73 @@ function Element3DRenderer({ el }: { el: Element3D }) {
   );
 }
 
+/**
+ * Smooth camera transition component.
+ * Lerps camera position and OrbitControls target when the preset changes.
+ */
+function SmoothCameraController({
+  targetPosition,
+  targetLookAt,
+  controlsRef,
+}: {
+  targetPosition: [number, number, number];
+  targetLookAt: [number, number, number];
+  controlsRef: React.RefObject<any>;
+}) {
+  const { camera } = useThree();
+  const posRef = useRef(new THREE.Vector3(...targetPosition));
+  const lookRef = useRef(new THREE.Vector3(...targetLookAt));
+  const frameCountRef = useRef(0);
+  const lerpSpeed = 0.06; // ~40 frames to converge
+
+  // Reset lerp counter when target changes
+  useEffect(() => {
+    posRef.current.set(...targetPosition);
+    lookRef.current.set(...targetLookAt);
+    frameCountRef.current = 0;
+  }, [targetPosition, targetLookAt]);
+
+  useFrame(() => {
+    if (frameCountRef.current > 120) return; // Stop after convergence
+    frameCountRef.current++;
+
+    camera.position.lerp(posRef.current, lerpSpeed);
+
+    if (controlsRef.current) {
+      const controls = controlsRef.current;
+      controls.target.lerp(lookRef.current, lerpSpeed);
+      controls.update();
+    }
+  });
+
+  return null;
+}
+
+/**
+ * Dynamic point lights placed above table tops.
+ */
+function TableLights({ elements3D }: { elements3D: Element3D[] }) {
+  const tableTops = useMemo(
+    () => elements3D.filter((el) => el.type === "table-top"),
+    [elements3D]
+  );
+
+  return (
+    <>
+      {tableTops.map((tt) => (
+        <pointLight
+          key={`table-light-${tt.id}`}
+          position={[tt.position[0], tt.position[1] + 1.2, tt.position[2]]}
+          color="#FFF5E0"
+          intensity={0.35}
+          distance={2.5}
+          decay={2}
+        />
+      ))}
+    </>
+  );
+}
+
 function Scene3D() {
   const elements = useDesignerStore((s) => s.elements);
   const canvasWidth = useDesignerStore((s) => s.canvasWidth);
@@ -92,15 +164,23 @@ function Scene3D() {
 
   return (
     <>
-      {/* Lighting */}
+      {/* Lighting — warm key + cool fill */}
       <ambientLight intensity={lightingPreset.ambient} color={lightingPreset.color} />
       <directionalLight
         position={[5, 8, 5]}
-        intensity={lightingPreset.directional}
-        color={lightingPreset.color}
+        intensity={lightingPreset.directional * 0.8}
+        color="#FFE4B5"
         castShadow
         shadow-mapSize={[1024, 1024]}
       />
+      <directionalLight
+        position={[-3, 6, -3]}
+        intensity={lightingPreset.directional * 0.4}
+        color="#B0C4DE"
+      />
+
+      {/* Dynamic table point lights */}
+      <TableLights elements3D={elements3D} />
 
       {/* Ground */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[groundW / 2, 0, groundH / 2]}>
@@ -136,8 +216,8 @@ function Scene3D() {
         <Element3DRenderer key={el.id} el={el} />
       ))}
 
-      {/* Environment */}
-      <Environment preset="apartment" background={false} />
+      {/* Environment — sunset for warmer lighting */}
+      <Environment preset="sunset" background={false} />
     </>
   );
 }
@@ -145,6 +225,7 @@ function Scene3D() {
 export function ThreeDScene() {
   const [cameraPresetIdx, setCameraPresetIdx] = useState(1); // Default: 45° overview
   const preset = CAMERA_PRESETS[cameraPresetIdx];
+  const controlsRef = useRef<any>(null);
 
   return (
     <div className="relative w-full h-full">
@@ -158,9 +239,21 @@ export function ThreeDScene() {
         }}
         className="rounded-xl"
       >
+        {/* Atmospheric fog */}
+        <fog attach="fog" args={["#F5F0E8", 8, 25]} />
+
         <Suspense fallback={null}>
           <Scene3D />
+
+          {/* Smooth camera transitions */}
+          <SmoothCameraController
+            targetPosition={preset.position}
+            targetLookAt={preset.target}
+            controlsRef={controlsRef}
+          />
+
           <OrbitControls
+            ref={controlsRef}
             target={preset.target}
             enableDamping
             dampingFactor={0.1}
@@ -168,11 +261,17 @@ export function ThreeDScene() {
             minDistance={1}
             maxDistance={20}
           />
+
+          {/* Post-processing */}
+          <EffectComposer>
+            <Bloom luminanceThreshold={0.9} intensity={0.4} mipmapBlur />
+            <Vignette offset={0.1} darkness={0.3} />
+          </EffectComposer>
         </Suspense>
       </Canvas>
 
-      {/* Camera preset buttons */}
-      <div className="absolute top-3 right-3 flex flex-col gap-1 z-10">
+      {/* Camera preset buttons — glass container */}
+      <div className="absolute top-3 right-3 flex flex-col gap-1 z-10 designer-glass rounded-xl p-2 shadow-lg">
         {CAMERA_PRESETS.map((cp, idx) => (
           <Button
             key={cp.name}
